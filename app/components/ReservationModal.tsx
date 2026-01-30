@@ -15,10 +15,11 @@ export default function ReservationModal({
   const [formData, setFormData] = useState({
     name: "",
     partySize: "2",
-    date: "",
-    time: "",
+    dateTime: "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -26,16 +27,78 @@ export default function ReservationModal({
     } else {
       document.body.style.overflow = "";
       setIsSubmitted(false);
-      setFormData({ name: "", partySize: "2", date: "", time: "" });
+      setIsSubmitting(false);
+      setError(null);
+      setFormData({ name: "", partySize: "2", dateTime: "" });
     }
   }, [isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/reservation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          partySize: formData.partySize,
+          dateTime: formData.dateTime,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create reservation");
+      }
+
+      setIsSubmitted(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Format datetime for display
+  const formatDateTime = (dateTimeStr: string) => {
+    if (!dateTimeStr) return { date: "", time: "" };
+    const date = new Date(dateTimeStr);
+    return {
+      date: date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      time: date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    };
+  };
+
+  // Get minimum datetime (now + 1 hour, rounded to next 30 min)
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setHours(now.getHours() + 1);
+    now.setMinutes(Math.ceil(now.getMinutes() / 30) * 30);
+    now.setSeconds(0);
+    now.setMilliseconds(0);
+    return now.toISOString().slice(0, 16);
   };
 
   if (!isOpen) return null;
+
+  const { date: displayDate, time: displayTime } = formatDateTime(formData.dateTime);
 
   return (
     <div className="fixed inset-0 z-[var(--z-modal)]">
@@ -83,6 +146,13 @@ export default function ReservationModal({
                 </p>
               </div>
 
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-[var(--radius-md)] text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Name */}
@@ -97,84 +167,60 @@ export default function ReservationModal({
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] placeholder:text-[var(--color-oak-muted)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none"
+                    disabled={isSubmitting}
+                    className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] placeholder:text-[var(--color-oak-muted)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="John Smith"
                   />
                 </div>
 
-                {/* Party Size & Date */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-oak-dark)] mb-2">
-                      Party Size
-                    </label>
-                    <select
-                      value={formData.partySize}
-                      onChange={(e) =>
-                        setFormData({ ...formData, partySize: e.target.value })
-                      }
-                      className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none appearance-none cursor-pointer"
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                        <option key={num} value={num}>
-                          {num} {num === 1 ? "guest" : "guests"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-oak-dark)] mb-2">
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, date: e.target.value })
-                      }
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Time */}
+                {/* Party Size */}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-oak-dark)] mb-2">
-                    Preferred Time
+                    Party Size
                   </label>
                   <select
-                    required
-                    value={formData.time}
+                    value={formData.partySize}
                     onChange={(e) =>
-                      setFormData({ ...formData, time: e.target.value })
+                      setFormData({ ...formData, partySize: e.target.value })
                     }
-                    className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none appearance-none cursor-pointer"
+                    disabled={isSubmitting}
+                    className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">Select a time</option>
-                    {[
-                      "5:00 PM",
-                      "5:30 PM",
-                      "6:00 PM",
-                      "6:30 PM",
-                      "7:00 PM",
-                      "7:30 PM",
-                      "8:00 PM",
-                      "8:30 PM",
-                      "9:00 PM",
-                      "9:30 PM",
-                    ].map((time) => (
-                      <option key={time} value={time}>
-                        {time}
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                      <option key={num} value={num}>
+                        {num} {num === 1 ? "guest" : "guests"}
                       </option>
                     ))}
                   </select>
                 </div>
 
+                {/* Date & Time */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-oak-dark)] mb-2">
+                    Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={formData.dateTime}
+                    onChange={(e) =>
+                      setFormData({ ...formData, dateTime: e.target.value })
+                    }
+                    min={getMinDateTime()}
+                    disabled={isSubmitting}
+                    className="w-full h-12 px-4 bg-[var(--color-warm-white)] border border-[var(--color-linen)] rounded-[var(--radius-md)] text-[var(--color-oak-dark)] transition-all focus:border-[var(--color-barrel-gold)] focus:shadow-[var(--shadow-gold-sm)] outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+
                 {/* Submit */}
-                <Button type="submit" fullWidth size="lg" className="mt-6">
-                  Confirm Reservation
+                <Button
+                  type="submit"
+                  fullWidth
+                  size="lg"
+                  className="mt-6"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Confirming..." : "Confirm Reservation"}
                 </Button>
               </form>
             </>
@@ -200,7 +246,8 @@ export default function ReservationModal({
               </h2>
               <p className="text-[var(--color-oak-medium)] mb-6">
                 Thank you, {formData.name}. We&apos;ve reserved a table for{" "}
-                {formData.partySize} on {formData.date} at {formData.time}.
+                {formData.partySize} {Number(formData.partySize) === 1 ? "guest" : "guests"} on{" "}
+                {displayDate} at {displayTime}.
               </p>
               <Button onClick={onClose} variant="secondary">
                 Close

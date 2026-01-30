@@ -3,6 +3,7 @@ import { Playfair_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
 import Navigation from "./components/Navigation";
 import Footer from "./components/Footer";
+import N8nChat from "./components/N8nChat";
 
 const playfairDisplay = Playfair_Display({
   variable: "--font-display",
@@ -35,6 +36,7 @@ export default function RootLayout({
         <Navigation />
         <main>{children}</main>
         <Footer />
+        <N8nChat />
       </body>
     </html>
   );
